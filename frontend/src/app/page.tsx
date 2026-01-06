@@ -3,6 +3,7 @@
 import type React from "react"
 import { useState } from "react"
 import Image from "next/image"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,6 +14,7 @@ import { apiClient } from "@/lib/api"
 import chipsImg from "@/pics/chips.png" // <-- put your chips image at src/pics/chips.png
 
 export default function PokerLoginPage() {
+  const router = useRouter()
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [isHovered, setIsHovered] = useState(false)
@@ -25,15 +27,35 @@ export default function PokerLoginPage() {
     setIsLoading(true)
 
     try {
+      // Mock login for testing: admin / 123456
+      const isMockLogin = username === "admin" && password === "123456"
+      
+      if (isMockLogin) {
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        // Mock successful response
+        const mockToken = `mock_token_${Date.now()}`
+        if (typeof window !== "undefined") {
+          localStorage.setItem("auth_token", mockToken)
+          localStorage.setItem("player_name", username)
+        }
+        router.push("/lobby")
+        return
+      }
+
+      // Real API call for other credentials
       const response = await apiClient.login(username, password)
-      // Store token in localStorage or handle as needed
+      // Store token and basic player info
       if (response.token) {
-        localStorage.setItem('auth_token', response.token)
-        // Redirect or update UI as needed
-        console.log("Login successful, token stored")
+        if (typeof window !== "undefined") {
+          localStorage.setItem("auth_token", response.token)
+          localStorage.setItem("player_name", username)
+        }
+        router.push("/lobby")
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : '登录失败，请检查用户名和密码'
+      const errorMessage = err instanceof Error ? err.message : "登录失败，请检查用户名和密码"
       setError(errorMessage)
       console.error("Login error:", err)
     } finally {
@@ -125,6 +147,13 @@ export default function PokerLoginPage() {
             <div className="flex items-center justify-between text-sm pt-4">
               <button className="text-primary hover:underline">忘记密码? 太笨！</button>
               <button className="text-primary hover:underline">创建账号</button>
+            </div>
+
+            {/* Mock Login Hint */}
+            <div className="text-center pt-2 border-t border-primary/20">
+              <p className="text-xs text-muted-foreground">
+                测试账号: <span className="text-primary font-mono">admin</span> / <span className="text-primary font-mono">123456</span>
+              </p>
             </div>
 
             <div className="flex justify-center mt-4">
