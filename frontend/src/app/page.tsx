@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
+import { apiClient } from "@/lib/api"
 
 // import the image from src/pics
 import chipsImg from "@/pics/chips.png" // <-- put your chips image at src/pics/chips.png
@@ -15,10 +16,29 @@ export default function PokerLoginPage() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [isHovered, setIsHovered] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("[v0] Login attempt:", { username, password: "***" })
+    setError(null)
+    setIsLoading(true)
+
+    try {
+      const response = await apiClient.login(username, password)
+      // Store token in localStorage or handle as needed
+      if (response.token) {
+        localStorage.setItem('auth_token', response.token)
+        // Redirect or update UI as needed
+        console.log("Login successful, token stored")
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '登录失败，请检查用户名和密码'
+      setError(errorMessage)
+      console.error("Login error:", err)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -59,6 +79,11 @@ export default function PokerLoginPage() {
 
             {/* Form */}
             <form onSubmit={handleLogin} className="space-y-5">
+              {error && (
+                <div className="p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md">
+                  {error}
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="username">用户名</Label>
                 <Input
@@ -68,6 +93,7 @@ export default function PokerLoginPage() {
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     required
+                    disabled={isLoading}
                 />
               </div>
               <div className="space-y-2">
@@ -79,6 +105,7 @@ export default function PokerLoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
+                    disabled={isLoading}
                 />
               </div>
 
@@ -87,9 +114,10 @@ export default function PokerLoginPage() {
                   className="w-full h-14 text-lg font-bold bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-300 transform hover:scale-105 hover:shadow-lg hover:shadow-primary/50 relative overflow-hidden group"
                   onMouseEnter={() => setIsHovered(true)}
                   onMouseLeave={() => setIsHovered(false)}
+                  disabled={isLoading}
               >
-                <span className="relative z-10">开玩！</span>
-                {isHovered && <div className="absolute inset-0 shimmer"/>}
+                <span className="relative z-10">{isLoading ? '登录中...' : '开玩！'}</span>
+                {isHovered && !isLoading && <div className="absolute inset-0 shimmer"/>}
               </Button>
             </form>
 
