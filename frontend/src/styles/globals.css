@@ -212,3 +212,26 @@
   animation: chip-shimmer 3.5s ease-in-out infinite;
 }
 
+/* Shining border animation for inputs - ORANGE/CORAL VERSION */
+/* TO CHANGE ANIMATION COLOR: Replace rgba(251, 145, 88, ...) with your color */
+/* Current: rgba(251, 145, 88, ...) - Orange/Coral */
+/* Gold: rgba(212, 175, 55, ...) | Blue: rgba(59, 130, 246, ...) | Red: rgba(239, 68, 68, ...) */
+@keyframes border-shine {
+  0% {
+    border-color: rgba(251, 162, 45, 0.5) !important;
+    box-shadow: 0 0 10px rgba(251, 145, 88, 0.3), 0 0 20px rgba(251, 145, 88, 0.2), 0 0 30px rgba(251, 145, 88, 0.1) !important;
+  }
+  50% {
+    border-color: rgba(251, 162, 45, 1) !important;
+    box-shadow: 0 0 20px rgba(251, 145, 88, 0.6), 0 0 40px rgba(251, 145, 88, 0.4), 0 0 60px rgba(251, 145, 88, 0.2) !important;
+  }
+  100% {
+    border-color: rgba(251, 162, 45, 0.5) !important;
+    box-shadow: 0 0 10px rgba(251, 145, 88, 0.3), 0 0 20px rgba(251, 145, 88, 0.2), 0 0 30px rgba(251, 145, 88, 0.1) !important;
+  }
+}
+
+.input-shine {
+  animation: border-shine 2s ease-in-out infinite;
+}
+
