@@ -16,6 +16,7 @@ interface SeatPlayer {
   id: string
   name: string
   avatar?: string
+  points?: number
 }
 
 interface Seat {
@@ -33,13 +34,13 @@ export default function LobbyPage() {
 
   // Mock seat data - in real app, this would come from API
   const [seats, setSeats] = useState<Seat[]>([
-    { number: 1, player: { id: "1", name: "HighRoller" } },
-    { number: 2, player: { id: "2", name: "RiverKing" } },
+    { number: 1, player: { id: "1", name: "HighRoller", points: 3250 } },
+    { number: 2, player: { id: "2", name: "RiverKing", points: 2812 } },
     { number: 3 },
-    { number: 4, player: { id: "4", name: "AllInQueen" } },
-    { number: 5, isButton: true, player: { id: "5", name: "SlowPlay" } },
+    { number: 4, player: { id: "4", name: "AllInQueen", points: 2344 } },
+    { number: 5, isButton: true, player: { id: "5", name: "SlowPlay", points: 1980 } },
     { number: 6 },
-    { number: 7, player: { id: "7", name: "ChipLeader" } },
+    { number: 7, player: { id: "7", name: "ChipLeader", points: 1765 } },
     { number: 8 },
     { number: 9 },
   ])
@@ -99,14 +100,14 @@ export default function LobbyPage() {
         setSeats((prevSeats) =>
           prevSeats.map((s) =>
             s.number === seatNumber
-              ? { ...s, player: { id: "current", name: playerName } }
+              ? { ...s, player: { id: "current", name: playerName, points: points } }
               : s
           )
         )
         setIsJoining(false)
         setSelectedSeat(null)
-        // TODO: Navigate to game page or show game UI
-        console.log(`Joined seat ${seatNumber}`)
+        // Navigate to game page
+        router.push(`/game?seat=${seatNumber}`)
       }, 1000)
     } catch (error) {
       console.error("Failed to join seat:", error)
@@ -293,13 +294,17 @@ export default function LobbyPage() {
                       const x = 50 + radiusX * Math.cos(angle) // Center at 50%
                       const y = 50 + radiusY * Math.sin(angle) // Center at 50%
 
+                      // Round to 2 decimal places to prevent hydration mismatches
+                      const roundedX = Math.round(x * 100) / 100
+                      const roundedY = Math.round(y * 100) / 100
+
                       return (
                         <div
                           key={seat.number}
                           className="absolute"
                           style={{
-                            left: `${x}%`,
-                            top: `${y}%`,
+                            left: `${roundedX}%`,
+                            top: `${roundedY}%`,
                             transform: "translate(-50%, -50%)",
                             zIndex: 10,
                           }}

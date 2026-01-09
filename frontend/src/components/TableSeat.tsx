@@ -1,11 +1,14 @@
 "use client"
 
 import { cn } from "@/lib/utils"
+import Image from "next/image"
+import chipsImg from "@/pics/casino-chips.png"
 
 interface SeatPlayer {
   id: string
   name: string
   avatar?: string
+  points?: number
 }
 
 interface TableSeatProps {
@@ -61,9 +64,6 @@ export default function TableSeat({
                 d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
               />
             </svg>
-            <span className="mt-0.5 text-[10px] font-semibold text-primary/60">
-              {seatNumber}
-            </span>
           </div>
         ) : (
           // Occupied seat with avatar
@@ -79,20 +79,32 @@ export default function TableSeat({
                 player.name.slice(0, 1).toUpperCase()
               )}
             </div>
-            {isButton && (
-              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
-                BTN
-              </div>
-            )}
+            {/*{isButton && (*/}
+            {/*  <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">*/}
+            {/*    BTN*/}
+            {/*  </div>*/}
+            {/*)}*/}
           </>
         )}
       </div>
 
-      {/* Player name/id below seat */}
+      {/* Player name/id and points below seat */}
       {player && (
         <div className="mt-2 max-w-[90px] truncate text-center px-1">
           <p className="text-xs font-semibold text-primary leading-tight">{player.name}</p>
-          <p className="text-[10px] text-muted-foreground leading-tight">Seat {seatNumber}</p>
+          {player.points !== undefined && (
+            <div className="flex items-center justify-center gap-1 mt-1">
+              <div className="relative w-4 h-4">
+                <Image
+                  src={chipsImg}
+                  alt="Chips"
+                  fill
+                  className="object-contain"
+                />
+              </div>
+              <span className="text-[10px] font-bold text-primary">{player.points.toLocaleString()}</span>
+            </div>
+          )}
         </div>
       )}
 
