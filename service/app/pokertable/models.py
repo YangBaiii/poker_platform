@@ -1,23 +1,26 @@
 from typing import List, Tuple, Optional, Dict
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import WebSocket
 from pydantic import BaseModel, Field, field_serializer
 
-from app.pokertable.enums import HandStatus, CardSuit, CardRank, UserStatus, PlayerStatus, RoomStatus, PlayerActionType
+from app.pokertable.enums import HandStatus, CardSuit, CardRank, PlayerStatus, RoomStatus, PlayerActionType, UserStatus
+from app.pokertable.gameconfig import gameconfig
 
 class Card(BaseModel):
     suit: CardSuit
     rank: CardRank
 
-class UserInRoom(BaseModel):
-    user_status: UserStatus = Field(default=UserStatus.ONLINE)
+    def to_treys_card(self) -> str:
+        return self.rank+self.suit
     
 class Player(BaseModel):
     nickname: str
     player_status: PlayerStatus = Field(default=PlayerStatus.ACTIVE)
     points: int
     hole_cards: Optional[Tuple[Card, Card]] = Field(default=None)
-    bet_amount: Optional[int] = Field(default=0,ge=0)
+    # round total bet amount
+    bet_amount: int = Field(default=0,ge=0)
+    seat_position: int
 
     @field_serializer("hole_cards", when_used="json")
     def hide_hole_cards(self, value):
@@ -27,32 +30,50 @@ class Hand(BaseModel):
     status: HandStatus
     # By default, the first position is the small blind bet and the second position is the large blind bet
     players: Optional[List[Player]]
+    # players[acting_player_position] is the acting player
     acting_player_position: Optional[int] = Field(default=None)
-    last_bet: Optional[int] = Field(default=None)
-    deck: Optional[List[Card]]
-    pot: int = Field(default=0,ge=0)
-    start_time: Optional[datetime]
+    last_bet: int = Field(default=0,ge=0)
+    deck: Optional[List[Card]] = Field(default=None)
+    # player_nickname -> this hand's bet_amount
+    pots: Dict[str, int]
+    start_time: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
     flop_cards: Optional[Tuple[Card, Card, Card]]
     turn_card: Optional[Card]
     river_card: Optional[Card]
-    
 
-class Room(BaseModel):
-    # user_nickname -> users_in_room
-    users_in_room: Dict[str, UserInRoom]
-    seats: List[Optional[Seat]] = Field(default=[])
-    hand: Optional[Hand] = Field(default=None)
-    status: RoomStatus = Field(default=RoomStatus.PENDING_START)
-    buy_in: int = Field(default=64,ge=32,le=128)
-    last_blind: List[str] = Field(default=[])
-    small_blind: int = Field(default=1,ge=1,le=3)
+
+    @field_serializer("deck", when_used="json")
+    def hide_deck(self, value):
+        return None
 
 class Seat(BaseModel):
     nickname: str
-    user_status: UserStatus = Field(default=UserStatus.ONLINE)
     points: int
-    hole_cards: Optional[Tuple[Card, Card]] = Field(default=None)
-    bet_amount: Optional[int] = Field(default=0,ge=0)
+    in_game_points: int = Field(default=0,ge=0)
+    new_here: bool = Field(default=True)
+
+class Room(BaseModel):
+    # user_nickname -> user_status
+    users_in_room: Dict[str, UserStatus]
+    seats: List[Optional[Seat]] = Field(default_factory=lambda: [None] * gameconfig.MAX_SEATS)
+    hand: Optional[Hand] = Field(default=None)
+    status: RoomStatus = Field(default=RoomStatus.PENDING_START)
+    buy_in: int = Field(
+        default=gameconfig.MIN_BUY_IN,
+        ge=gameconfig.MIN_BUY_IN,
+        le=gameconfig.MAX_BUY_IN
+    )
+    new_player_seat_list: List[int] = Field(default=[])
+    button_position: int = Field(default=gameconfig.MAX_SEATS - 1)
+    small_blind: int = Field(
+        default=gameconfig.DEFAULT_SMALL_BLIND,
+        ge=gameconfig.MIN_SMALL_BLIND,
+        le=gameconfig.MAX_SMALL_BLIND
+    )
+    # user_nickname -> user_status
+    # when the room is disconnected, the user_status will be saved to the snapshot
+    disconnect_snapshot: Dict[str, UserStatus] = Field(default={})
+
 
 class PlayerAction(BaseModel):
     user_nickname: str

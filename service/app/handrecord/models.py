@@ -3,12 +3,12 @@ from sqlmodel import Field, SQLModel, Relationship
 from pydantic import BaseModel
 
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 class HandRecord(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     
-    start_time: datetime = Field(default_factory=datetime.now,nullable=False)
+    start_time: datetime = Field(default_factory=lambda: datetime.now(timezone.utc),nullable=False)
     end_time: datetime = Field(nullable=False)
     
     final_pot: int = Field(nullable=False)
@@ -56,7 +56,12 @@ class HandRecordReadPagination(BaseModel):
     page: int
     total: int
 
-class MyHandRecordRead(BaseModel):
+class PersonalHandRecordRequest(BaseModel):
+    user_nickname: str
+    itemperpage: int
+    page: int
+
+class PersonalHandRecordRead(BaseModel):
     hand_id: int
     start_time: datetime
     end_time: datetime
@@ -64,8 +69,8 @@ class MyHandRecordRead(BaseModel):
     initial_points: int
     final_points: int
 
-class MyHandRecordReadPagination(BaseModel):
-    hand_records: list[MyHandRecordRead]
+class PersonalHandRecordReadPagination(BaseModel):
+    hand_records: list[PersonalHandRecordRead]
     itemperpage: int
     page: int
     total: int

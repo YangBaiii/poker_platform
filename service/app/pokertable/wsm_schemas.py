@@ -1,6 +1,6 @@
-from typing import Literal, Union, Optional, List, Annotated
+from typing import Literal, Union, Optional, List, Annotated, Tuple, Dict
 from pydantic import BaseModel, Field, Discriminator
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.pokertable.enums import UserStatus, HandStatus, RoomStatus, PlayerActionType, PlayerStatus
 from app.pokertable.models import Card, Player, Hand, Room
@@ -9,10 +9,38 @@ from app.pokertable.models import Card, Player, Hand, Room
 # client -> server （ClientMessage）
 # ============================================
 
+class SitdownMessage(BaseModel):
+    type: Literal["sit_down"] = "sit_down"
+    seat_number: int
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "type": "sit_down",
+                "seat_number": 0
+            }
+        }
+    }
+
+class BuyInMessage(BaseModel):
+    type: Literal["buy_in"] = "buy_in"
+    buy_in: int
+    seat_number: int
+    
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "type": "buy_in",
+                "buy_in": 64
+            }
+        }
+    }
+
 class SetUserStatusMessage(BaseModel):
     type: Literal["set_user_status"] = "set_user_status"
     user_status: UserStatus
-    
+    seat_number: int
+
     model_config = {
         "json_schema_extra": {
             "example": {
@@ -51,7 +79,8 @@ class SetBuyInMessage(BaseModel):
 
 class StartHandMessage(BaseModel):
     type: Literal["start_hand"] = "start_hand"
-    
+    seat_number: int
+
     model_config = {
         "json_schema_extra": {
             "example": {
@@ -60,11 +89,14 @@ class StartHandMessage(BaseModel):
         }
     }
 
+class LeaveRoomMessage(BaseModel):
+    type: Literal["leave_room"] = "leave_room"
+
 
 class PlayerActionMessage(BaseModel):
-    """玩家操作"""
     type: Literal["player_action"] = "player_action"
     action: PlayerActionType
+    # this round total bet amount
     bet_amount: Optional[int] = Field(default=None, ge=0)
     
     model_config = {
@@ -106,12 +138,15 @@ class ChatMessage(BaseModel):
 # 客户端消息联合类型（使用 Discriminated Union）
 ClientMessage = Annotated[
     Union[
+        SitdownMessage,
         SetUserStatusMessage,
         SetSmallBlindMessage,
         SetBuyInMessage,
         StartHandMessage,
         PlayerActionMessage,
         ChatMessage,
+        BuyInMessage,
+        LeaveRoomMessage,
     ],
     Field(discriminator="type")
 ]
@@ -121,31 +156,73 @@ ClientMessage = Annotated[
 # server -> client （ServerMessage）
 # ============================================
 
+class UserSitdownMessage(BaseModel):
+    type: Literal["user_sitdown"] = "user_sitdown"
+    seat_number: int
+    user_nickname: str
+    timestamp: datetime = datetime.now(timezone.utc)
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "type": "user_sitdown",
+                "seat_number": 0,
+                "user_nickname": "John",
+                "timestamp": "2025-12-07T12:00:00"
+            }
+        }
+    }
+
+class PlayerBuyInMessage(BaseModel):
+    type: Literal["player_buy_in"] = "player_buy_in"
+    seat_number: int
+    user_nickname: str
+    buy_in: int
+    timestamp: datetime = datetime.now(timezone.utc)
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "type": "player_buy_in",
+                "seat_number": 0,
+                "user_nickname": "John",
+                "buy_in": 64
+            }
+        }
+    }
+
+
 class UserOnlineMessage(BaseModel):
     
     type: Literal["user_online"] = "user_online"
     nickname: str
     user_status: UserStatus
-    timestamp: datetime = Field(default_factory=datetime.now)
+    timestamp: datetime = datetime.now(timezone.utc)
 
 
 class UserOfflineMessage(BaseModel):
     type: Literal["user_offline"] = "user_offline"
     nickname: str
-    timestamp: datetime = Field(default_factory=datetime.now)
+    timestamp: datetime = datetime.now(timezone.utc)
+
+class UserLeaveRoomMessage(BaseModel):
+    type: Literal["user_leave_room"] = "user_leave_room"
+    nickname: str
+    leave_type: Literal["offline", "leave_room"]
+    timestamp: datetime = datetime.now(timezone.utc)
 
 
 class SmallBlindSetMessage(BaseModel):
     type: Literal["small_blind_set"] = "small_blind_set"
     set_by: str
     small_blind: int
-    timestamp: datetime = Field(default_factory=datetime.now)
+    timestamp: datetime = datetime.now(timezone.utc)
 
 class BuyInSetMessage(BaseModel):
     type: Literal["buy_in_set"] = "buy_in_set"
     buy_in: int
     set_by: str
-    timestamp: datetime = Field(default_factory=datetime.now)
+    timestamp: datetime = datetime.now(timezone.utc)
 
 class RoomStateMessage(BaseModel):
     type: Literal["room_state"] = "room_state"
@@ -155,31 +232,26 @@ class UserStatusChangedMessage(BaseModel):
     type: Literal["user_status_changed"] = "user_status_changed"
     user_status: UserStatus
     user_nickname: str
-    timestamp: datetime = Field(default_factory=datetime.now)
+    seat_number: int
+    timestamp: datetime = datetime.now(timezone.utc)
 
 class RoomStatusChangedMessage(BaseModel):
     type: Literal["room_status_changed"] = "room_status_changed"
     room_status: RoomStatus
     changed_by: str
-    timestamp: datetime = Field(default_factory=datetime.now)
+    timestamp: datetime = datetime.now(timezone.utc)
 
 class HandStartedMessage(BaseModel):
     type: Literal["hand_started"] = "hand_started"
     hand : Hand
-    timestamp: datetime = Field(default_factory=datetime.now)
+    # if dead_blind is -1, it means no dead blind
+    dead_blind: int
+    timestamp: datetime = datetime.now(timezone.utc)
 
 
 class HoleCardsMessage(BaseModel):
     type: Literal["hole_cards"] = "hole_cards"
-    cards: tuple[Card, Card]
-
-
-class BettingRoundStartedMessage(BaseModel):
-    type: Literal["betting_round_started"] = "betting_round_started"
-    hand_status: HandStatus
-    acting_player: str
-    pot: int
-    last_bet: Optional[int]
+    cards: Tuple[Card, Card]
 
 
 class PlayerActionBroadcast(BaseModel):
@@ -189,40 +261,44 @@ class PlayerActionBroadcast(BaseModel):
     action: PlayerActionType
     bet_amount: Optional[int]
     pot: int
-    next_player: Optional[str]
-    timestamp: datetime = Field(default_factory=datetime.now)
+    next_acting_player: Optional[str]
+    timestamp: datetime = datetime.now(timezone.utc)
 
 
-class HandStageChangedMessage(BaseModel):
-    """手牌阶段变化（发公共牌）"""
-    type: Literal["hand_stage_changed"] = "hand_stage_changed"
+class HandStatusChangedMessage(BaseModel):
+    type: Literal["hand_status_changed"] = "hand_status_changed"
     hand_status: HandStatus
-    community_cards: List[Card]
-    pot: int
-    next_player: str
+    community_cards: Optional[Dict[str, List[Card]]] = Field(default=None)
+    pot: int 
+    next_acting_player: str 
+    last_bet: Optional[int] = Field(default=None)
 
 
 class HandEndedMessage(BaseModel):
     """手牌结束"""
     type: Literal["hand_ended"] = "hand_ended"
-    winners: List[str]
-    pot_distribution: dict[str, int]
-    final_board: List[Card]
-    showdown_hands: Optional[dict[str, tuple[Card, Card]]]  
+    total_pot: int
+    pot_distribution: Dict[str, int]
 
+
+class HandShowDownMessage(BaseModel):
+    type: Literal["hand_show_down"] = "hand_show_down"
+    community_cards: List[Card]
+    show_down_player_hole_cards: Dict[str, List[Card]]
+    timestamp: datetime = datetime.now(timezone.utc)
 
 class ChatBroadcast(BaseModel):
     type: Literal["chat_broadcast"] = "chat_broadcast"
     sender: str
     message: str
-    timestamp: datetime = Field(default_factory=datetime.now)
+    timestamp: datetime = datetime.now(timezone.utc)
 
 
 class ErrorMessage(BaseModel):
     type: Literal["error"] = "error"
     error_code: str
     message: str
-    timestamp: datetime = Field(default_factory=datetime.now)
+    timestamp: datetime = datetime.now(timezone.utc)
     
     model_config = {
         "json_schema_extra": {
@@ -247,9 +323,8 @@ ServerMessage = Annotated[
         RoomStatusChangedMessage,
         HandStartedMessage,
         HoleCardsMessage,
-        BettingRoundStartedMessage,
         PlayerActionBroadcast,
-        HandStageChangedMessage,
+        HandStatusChangedMessage,
         HandEndedMessage,
         ChatBroadcast,
         ErrorMessage,
