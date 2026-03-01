@@ -5,8 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import PlayerInfoCard from "@/components/PlayerInfoCard"
+import PokerCard from "@/components/PokerCard"
 import Image from "next/image"
 import gamingTableBg from "@/pics/game-table.jpg"
+import { cn } from "@/lib/utils"
+import { createDeck } from "@/utils/poker"
+import type { Card as PokerCardType } from "@/types/poker"
 
 interface SeatPlayer {
   id: string
@@ -43,6 +47,18 @@ export default function GamePage() {
     { number: 8, player: { id: "8", name: "Tom Dwan", points: 2344, isReady: true } },
     { number: 9, player: { id: "9", name: "Tan Xuan", points: 2344, isReady: true } },
   ])
+
+  // Game mode: after all ready and Start Game
+  const [gameStarted, setGameStarted] = useState(false)
+  const [playerHands, setPlayerHands] = useState<Record<number, PokerCardType[]>>({})
+  const [currentBet, setCurrentBet] = useState(0)
+  const [callAmount, setCallAmount] = useState(20)
+  const [raiseAmount, setRaiseAmount] = useState(40)
+  const [pot, setPot] = useState(0)
+  const [phase, setPhase] = useState<"preflop" | "flop" | "turn" | "river" | "showdown">("preflop")
+  const [communityCards, setCommunityCards] = useState<PokerCardType[]>([])
+  const [remainingDeck, setRemainingDeck] = useState<PokerCardType[]>([])
+  const [foldedSeats, setFoldedSeats] = useState<Set<number>>(new Set())
 
   const currentPlayers = useMemo(
     () => seats.filter((seat) => seat.player).length,
@@ -87,9 +103,6 @@ export default function GamePage() {
 
   const handleReady = async () => {
     try {
-      // Placeholder for real ready call
-      // await apiClient.setReady(gameId, 6) // Always seat 6
-      
       setIsReady(true)
       setSeats((prevSeats) =>
         prevSeats.map((s) =>
@@ -103,18 +116,95 @@ export default function GamePage() {
     }
   }
 
+  /** For testing: mark all players ready so "Start Game" appears */
+  const handleSetAllReadyTest = () => {
+    setIsReady(true)
+    setSeats((prevSeats) =>
+      prevSeats.map((s) =>
+        s.player ? { ...s, player: { ...s.player, isReady: true } } : s
+      )
+    )
+  }
+
   const handleStartGame = async () => {
     if (!allReady) return
 
     try {
-      // Placeholder for real start game call
-      // await apiClient.startGame(gameId)
-      console.log("Game starting...")
-      // TODO: Navigate to actual game play page or start the game
+      const deck = createDeck()
+      const hands: Record<number, PokerCardType[]> = {}
+      let idx = 0
+      seats.forEach((seat) => {
+        if (seat.player && idx + 2 <= deck.length) {
+          hands[seat.number] = [deck[idx], deck[idx + 1]]
+          idx += 2
+        }
+      })
+      setPlayerHands(hands)
+      setGameStarted(true)
+      setCurrentBet(20)
+      setCallAmount(20)
+      setRaiseAmount(40)
+      setPot(readyPlayers * 30)
+      setPhase("preflop")
+      setCommunityCards([])
+      setRemainingDeck(deck.slice(idx))
+      setFoldedSeats(new Set())
     } catch (error) {
       console.error("Failed to start game:", error)
     }
   }
+
+  const advanceToFlop = () => {
+    setRemainingDeck((prev) => {
+      if (prev.length >= 3) {
+        setCommunityCards(prev.slice(0, 3))
+        setPhase("flop")
+        return prev.slice(3)
+      }
+      return prev
+    })
+  }
+  const advanceToTurn = () => {
+    setRemainingDeck((prev) => {
+      if (prev.length < 1) return prev
+      const card = prev[0]
+      setCommunityCards((c) => {
+        if (c.length !== 3) return c
+        setPhase("turn")
+        return [...c, card]
+      })
+      return prev.slice(1)
+    })
+  }
+  const advanceToRiver = () => {
+    setRemainingDeck((prev) => {
+      if (prev.length < 1) return prev
+      const card = prev[0]
+      setCommunityCards((c) => {
+        if (c.length !== 4) return c
+        setPhase("river")
+        return [...c, card]
+      })
+      return prev.slice(1)
+    })
+  }
+  const advanceToShowdown = () => {
+    setPhase((p) => (p === "river" ? "showdown" : p))
+  }
+
+  const handleAction = (action: "fold" | "check" | "call" | "raise" | "all-in") => {
+    if (action === "fold") {
+      setFoldedSeats((prev) => new Set(prev).add(6)) // current player is seat 6
+    }
+    if (action === "raise") {
+      setCurrentBet(raiseAmount)
+    }
+    if (action === "all-in") {
+      setCurrentBet(points)
+    }
+  }
+
+  const currentPlayerFolded = foldedSeats.has(6)
 
   const handleLeave = () => {
     if (typeof window !== "undefined") {
@@ -163,6 +253,48 @@ export default function GamePage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {/* Temporary street buttons – left of Ready */}
+            {gameStarted && (
+              <div className="flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-black/60 px-2 py-1.5">
+                <span className="text-[10px] font-semibold uppercase text-amber-500/90 mr-0.5">Tmp:</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={advanceToFlop}
+                  disabled={phase !== "preflop"}
+                  className="h-6 rounded px-2 text-[11px] border-amber-500/50 text-amber-200 hover:bg-amber-500/20"
+                >
+                  Flop
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={advanceToTurn}
+                  disabled={phase !== "flop"}
+                  className="h-6 rounded px-2 text-[11px] border-amber-500/50 text-amber-200 hover:bg-amber-500/20"
+                >
+                  Turn
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={advanceToRiver}
+                  disabled={phase !== "turn"}
+                  className="h-6 rounded px-2 text-[11px] border-amber-500/50 text-amber-200 hover:bg-amber-500/20"
+                >
+                  River
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={advanceToShowdown}
+                  disabled={phase !== "river"}
+                  className="h-6 rounded px-2 text-[11px] border-amber-500/50 text-amber-200 hover:bg-amber-500/20"
+                >
+                  Showdown
+                </Button>
+              </div>
+            )}
             {!isReady ? (
               <Button
                 onClick={handleReady}
@@ -175,13 +307,28 @@ export default function GamePage() {
                 <span className="text-green-400 font-bold text-sm">✓ Ready</span>
               </div>
             )}
-            {allReady && (
+            {!allReady && !gameStarted && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSetAllReadyTest}
+                className="border-amber-500/50 text-amber-600 dark:text-amber-400 text-xs"
+              >
+                Test: Set all ready
+              </Button>
+            )}
+            {allReady && !gameStarted && (
               <Button
                 onClick={handleStartGame}
                 className="bg-green-600 hover:bg-green-700 text-white font-bold"
               >
                 Start Game
               </Button>
+            )}
+            {gameStarted && (
+              <span className="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/50 text-emerald-400 font-semibold text-sm">
+                In game
+              </span>
             )}
             <Button
               variant="outline"
@@ -217,6 +364,22 @@ export default function GamePage() {
             {/* Dark overlay for better contrast */}
             <div className="absolute inset-0 bg-black/20"></div>
 
+            {/* Community cards: 5 fixed slots – flop = slots 0–2 (never move), turn/river append in 3–4 */}
+            {gameStarted && (
+              <div
+                className="absolute left-[63%] top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2"
+                style={{ transform: "translate(-50%, -50%)" }}
+              >
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-20 w-14 shrink-0">
+                    {communityCards[i] ? (
+                      <PokerCard card={communityCards[i]} size="md" className="h-full w-full" />
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Player info cards - MANUAL POSITIONING */}
             {/* Each card position is set manually using percentages (0-100%) */}
             {/* left: 0% = far left, 50% = center, 100% = far right */}
@@ -224,45 +387,167 @@ export default function GamePage() {
             {seats.map((seat) => {
               if (!seat.player) return null
 
-              // MANUAL POSITIONING FOR EACH SEAT
-              // Adjust these percentages to position each card on the table image
-              // Format: { seatNumber: { left: X%, top: Y% } }
+              // Seat positions: bottom row (5,6,7) aligned at same top; user (6) centered
               const manualPositions: Record<number, { left: number; top: number }> = {
-                1: { left: 25, top: 10 },   // Seat 1 - Top-left area
-                2: { left: 50, top: 6 },   // Seat 2 - Top-center
-                3: { left: 77, top: 12 },   // Seat 3 - Top-right
-                4: { left: 95, top: 40 },   // Seat 4 - Right-top
-                5: { left: 85, top: 82 },   // Seat 5 - Right-center (Button)
-                6: { left: 52, top: 87 },   // Seat 6 - Right-bottom
-                7: { left: 17, top: 82 },   // Seat 7 - Bottom-right
-                8: { left: 5, top: 60 },   // Seat 8 - Bottom-center
-                9: { left: 7, top: 30 },   // Seat 9 - Bottom-left
+                1: { left: 25, top: 11 },
+                2: { left: 50, top: 9 },
+                3: { left: 77, top: 12 },
+                4: { left: 95, top: 40 },
+                5: { left: 72, top: 84 },
+                6: { left: 50, top: 84 },  // User – aligned with 5 & 7
+                7: { left: 28, top: 84 },
+                8: { left: 5, top: 60 },
+                9: { left: 7, top: 30 },
               }
 
               const position = manualPositions[seat.number] || { left: 50, top: 50 }
 
+              const hand = gameStarted ? playerHands[seat.number] : []
+              const isCurrent = seat.player.id === "current"
+
               return (
                 <div
                   key={seat.number}
-                  className="absolute"
+                  className={cn(
+                    "absolute flex flex-col items-center",
+                    !isCurrent && "gap-0.5"
+                  )}
                   style={{
-                    // MANUAL POSITIONING - Change these percentages to move cards
-                    left: `${position.left}%`,  // ADJUST: 0-100% (left to right)
-                    top: `${position.top}%`,    // ADJUST: 0-100% (top to bottom)
-                    transform: "translate(-50%, -50%)", // Centers the card on the position
+                    left: `${position.left}%`,
+                    top: `${position.top}%`,
+                    transform: "translate(-50%, -50%)",
                     zIndex: 20,
-                    minWidth: "140px",
+                    minWidth: isCurrent ? "120px" : "100px",
                   }}
                 >
-                  <PlayerInfoCard
-                    player={seat.player}
-                    isButton={seat.isButton}
-                    isCurrentPlayer={seat.player.id === "current"}
-                  />
+                  {isCurrent ? (
+                    <>
+                      {/* Current player: cards on top, half covered by info bar; face-down if folded */}
+                      {gameStarted && hand.length === 2 && (
+                        <div className="relative z-0 flex justify-center -mb-10">
+                          <div className="flex items-end min-h-[32px]">
+                            {currentPlayerFolded ? (
+                              <>
+                                <PokerCard
+                                  card={hand[0]}
+                                  isHidden
+                                  size="lg"
+                                  className="origin-bottom -mr-6 -rotate-[10deg] opacity-90"
+                                />
+                                <PokerCard
+                                  card={hand[1]}
+                                  isHidden
+                                  size="lg"
+                                  className="origin-bottom -ml-6 rotate-[10deg] opacity-90"
+                                />
+                              </>
+                            ) : (
+                              <>
+                                <PokerCard
+                                  card={hand[0]}
+                                  size="lg"
+                                  cornerLabel
+                                  className="origin-bottom -mr-6 -rotate-[10deg]"
+                                />
+                                <PokerCard
+                                  card={hand[1]}
+                                  size="lg"
+                                  cornerLabel
+                                  className="origin-bottom -ml-6 rotate-[10deg]"
+                                />
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      <div className="relative z-10">
+                        {currentPlayerFolded && (
+                          <div className="absolute -top-1 left-1/2 z-20 -translate-x-1/2 rounded bg-slate-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                            Folded
+                          </div>
+                        )}
+                        <PlayerInfoCard
+                          player={seat.player}
+                          isButton={seat.isButton}
+                          isCurrentPlayer={true}
+                          className={cn("scale-105", currentPlayerFolded && "opacity-75")}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <PlayerInfoCard
+                        player={seat.player}
+                        isButton={seat.isButton}
+                        isCurrentPlayer={false}
+                        className="scale-90"
+                      />
+                      {gameStarted && hand.length === 2 && (
+                        <div className="flex origin-center -mr-2">
+                          <PokerCard card={hand[0]} isHidden size="lg" className="-mr-2" />
+                          <PokerCard card={hand[1]} isHidden size="lg" className="-ml-2" />
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               )
             })}
           </div>
+
+          {/* Game mode: compact action bar (hidden when current player folded) */}
+          {gameStarted && !currentPlayerFolded && (
+            <div className="absolute left-0 right-0 z-30 flex flex-col items-center gap-2 pb-2 bottom-6">
+              <div className="flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-white/10 py-1.5 px-2 shadow-lg">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => handleAction("fold")}
+                  className="h-7 rounded-full px-3 text-xs font-semibold shadow-sm min-w-0"
+                >
+                  Fold
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => handleAction("check")}
+                  className="h-7 rounded-full px-3 text-xs font-semibold border-white/10 min-w-0"
+                >
+                  Check
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => handleAction("call")}
+                  className="h-7 rounded-full px-3 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white min-w-0"
+                >
+                  Call {callAmount}
+                </Button>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={callAmount * 2}
+                    value={raiseAmount}
+                    onChange={(e) => setRaiseAmount(Number(e.target.value) || raiseAmount)}
+                    className="w-14 rounded-full border border-amber-500/40 bg-black/50 px-2 py-1 text-center text-xs font-semibold text-amber-200 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => handleAction("raise")}
+                    className="h-7 rounded-full px-3 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white min-w-0"
+                  >
+                    Raise
+                  </Button>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => handleAction("all-in")}
+                  className="h-7 rounded-full px-3 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white min-w-0"
+                >
+                  All-in
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
       </div>
     </div>
